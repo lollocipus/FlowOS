@@ -1,0 +1,18 @@
+# build outputs
+/build/
+*.o
+*.bin
+*.elf
+*.iso
+
+# logs and emulator artifacts
+qemu.log
+
+# editor/OS cruft
+*.swp
+*.tmp
+*.log
+*.DS_Store
+
+# local screenshots/debug captures
+Screenshot*.png
