@@ -55,11 +55,21 @@ static void vga_set_cursor(int row, int col) {
     vga_col = col;
 }
 
-static void vga_put_char(char c) {
+void vga_put_char(char c) {
     if (c == '\n') {
         vga_col = 0;
         if (++vga_row >= VGA_ROWS) {
             vga_row = 0;
+        }
+        return;
+    }
+    
+    if (c == '\b') {
+        if (vga_col > 0) {
+            vga_col--;
+            const int idx = (vga_row * VGA_COLS + vga_col) * 2;
+            VGA_MEMORY[idx] = ' ';
+            VGA_MEMORY[idx + 1] = vga_color;
         }
         return;
     }
@@ -448,11 +458,11 @@ void kmain(struct multiboot_info* mboot) {
     // Boot complete
     show_booted_message();
 
-    log_info("FlowOS: Boot complete! Loading test program...");
+    log_info("FlowOS: Boot complete! Loading shell...");
     
-    // Try to load and execute a test ELF program
-    if (elf_exec("TEST") < 0) {
-        log_info("ELF: Failed to load test program");
+    // Try to load and execute shell
+    if (elf_exec("SHELL") < 0) {
+        log_info("ELF: Failed to load shell");
     }
     
     log_info("FlowOS: System ready.");
