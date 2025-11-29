@@ -23,7 +23,12 @@ SECTIONS {
     }
 
     .bss : ALIGN(0x1000) {
+        _bss_start = .;
         *(.bss)
         *(.bss.*)
+        *(COMMON)
+        _bss_end = .;
     }
+
+    _end = .;
 }

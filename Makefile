@@ -58,7 +58,7 @@ iso: $(TARGET) $(GRUB_CFG_TARGET)
 
 # Run the OS in QEMU
 run: iso
-	$(QEMU) -cdrom $(ISO_FILE)
+	$(QEMU) -boot d -cdrom $(ISO_FILE)
 
 # Clean up build files
 clean:

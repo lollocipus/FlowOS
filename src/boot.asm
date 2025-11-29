@@ -1,33 +1,43 @@
 
+[bits 32]
 
-; Set up a multiboot header.
+; Multiboot header
 section .multiboot
 align 4
     dd 0x1BADB002            ; Magic number
-    dd 0x00                  ; Flags
-    dd - (0x1BADB002 + 0x00) ; Checksum
+    dd 0x03                  ; Flags
+    dd - (0x1BADB002 + 0x03) ; Checksum
 
-; The stack size.
+; Stack size
 STACK_SIZE equ 0x4000
 
-; The actual boot code.
-[bits 32]
 section .text
 global _start
 extern kmain
 
 _start:
-    ; Set up the stack.
+    ; Set up the stack
     mov esp, stack_space + STACK_SIZE
 
-    ; Call the C kernel's main function.
-    call kmain
+    ; Clear interrupts until we set up IDT
+    cli
 
-    ; Halt the CPU.
+    ; Push multiboot info pointer (ebx contains it from bootloader)
+    push ebx
+
+    ; Call the C kernel's main function
+    call kmain
+    
+    ; Pop argument
+    add esp, 4
+
+    ; Halt if kmain returns
+.halt:
     cli
     hlt
+    jmp .halt
 
-; The stack.
+; Stack
 section .bss
 align 16
 stack_space:
