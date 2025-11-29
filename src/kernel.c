@@ -12,6 +12,11 @@
 #include "heap.h"
 #include "process.h"
 #include "pic.h"
+#include "vfs.h"
+#include "ata.h"
+#include "fat32.h"
+#include "syscalls.h"
+#include "elf.h"
 
 // VGA text-mode driver
 static volatile char* const VGA_MEMORY = (char*)0xB8000;
@@ -235,8 +240,23 @@ static void show_login_screen(void) {
 
     vga_write_centered(box_top + 9, "Press ENTER after each field");
 
-    read_input(box_top + 4, field_col, login_username, field_width, 0);
-    read_input(box_top + 6, field_col, login_password, field_width, 1);
+    while (1) {
+        read_input(box_top + 4, field_col, login_username, field_width, 0);
+        read_input(box_top + 6, field_col, login_password, field_width, 1);
+
+        if (kstrlen(login_username) > 0 && kstrlen(login_password) > 0) {
+            break;
+        }
+        
+        vga_write_centered(box_top + 9, "Invalid credentials!");
+        timer_wait(100);
+        vga_write_centered(box_top + 9, "                             ");
+        vga_write_centered(box_top + 9, "Press ENTER after each field");
+        
+        // Clear inputs
+        draw_input_field(box_top + 4, field_col, field_width);
+        draw_input_field(box_top + 6, field_col, field_width);
+    }
 
     vga_write_centered(box_top + 9, "                             ");
     vga_write_centered(box_top + 9, "Authenticating...");
@@ -291,7 +311,7 @@ static void print_serial(const char* str) {
     }
 }
 
-static void log_info(const char* msg) {
+void log_info(const char* msg) {
     print_serial("[INFO] ");
     print_serial(msg);
     print_serial("\n");
@@ -311,6 +331,9 @@ static void log_info(const char* msg) {
 // External symbol for heap placement
 extern uint32_t _end;
 
+// Kernel interrupt stack for TSS
+static uint8_t kernel_interrupt_stack[8192] __attribute__((aligned(16)));
+
 void kmain(struct multiboot_info* mboot) {
     // Initialize serial for debug output
     serial_init();
@@ -325,6 +348,12 @@ void kmain(struct multiboot_info* mboot) {
     vga_write_at(24, 0, "Initializing GDT...");
     log_info("FlowOS: Initializing GDT...");
     gdt_init();
+    
+    // Set up TSS with kernel stack for interrupts from Ring 3
+    extern void write_tss(int32_t num, uint16_t ss0, uint32_t esp0);
+    uint32_t kernel_stack_top = (uint32_t)kernel_interrupt_stack + sizeof(kernel_interrupt_stack);
+    write_tss(5, 0x10, kernel_stack_top);
+    log_info("FlowOS: TSS configured with kernel interrupt stack");
 
     // Initialize IDT
     vga_write_at(24, 0, "Initializing IDT...");
@@ -338,6 +367,8 @@ void kmain(struct multiboot_info* mboot) {
     vga_write_at(24, 0, "Initializing PMM...");
     log_info("FlowOS: Initializing PMM...");
     pmm_init(mboot);
+
+
 
     // Initialize Paging
     vga_write_at(24, 0, "Initializing Paging...");
@@ -360,6 +391,23 @@ void kmain(struct multiboot_info* mboot) {
     log_info("FlowOS: Initializing heap...");
     heap_init(KERNEL_HEAP_VIRT, HEAP_PAGES * PAGE_SIZE);
 
+    // Initialize ATA
+    log_info("FlowOS: Initializing ATA...");
+    ata_init();
+
+    // Initialize FAT32
+    log_info("FlowOS: Initializing FAT32...");
+    fat32_init();
+    
+    // Debug: List files in root directory
+    log_info("FAT32: Files in root directory:");
+    for (int i = 0; i < 20; i++) {
+        struct dirent* entry = vfs_readdir(fs_root, i);
+        if (!entry) break;
+        log_info(entry->name);
+        kfree(entry);
+    }
+
     // Initialize timer (100 Hz)
     vga_write_at(24, 0, "Initializing Timer...");
     log_info("FlowOS: Initializing timer...");
@@ -374,6 +422,9 @@ void kmain(struct multiboot_info* mboot) {
     log_info("FlowOS: Initializing process management...");
     process_init();
     scheduler_init();
+    
+    // Initialize Syscalls
+    syscall_init();
 
     // Enable interrupts
     log_info("FlowOS: Enabling interrupts...");
@@ -396,6 +447,15 @@ void kmain(struct multiboot_info* mboot) {
 
     // Boot complete
     show_booted_message();
+
+    log_info("FlowOS: Boot complete! Loading test program...");
+    
+    // Try to load and execute a test ELF program
+    if (elf_exec("TEST") < 0) {
+        log_info("ELF: Failed to load test program");
+    }
+    
+    log_info("FlowOS: System ready.");
 
     // Main loop
     while (1) {

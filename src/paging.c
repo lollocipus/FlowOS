@@ -40,6 +40,23 @@ static void page_fault_handler(struct registers* regs) {
     return;
 
 panic:
+    log_info("Page Fault Panic!");
+    // Print CR2
+    uint32_t cr2;
+    __asm__ __volatile__("mov %%cr2, %0" : "=r"(cr2));
+    
+    // Convert CR2 to string manually since we don't have printf
+    char buf[32];
+    char hex[] = "0123456789ABCDEF";
+    buf[0] = '0'; buf[1] = 'x';
+    for(int i = 0; i < 8; i++) {
+        buf[9-i] = hex[(cr2 >> (i*4)) & 0xF];
+    }
+    buf[10] = '\0';
+    
+    log_info("Fault Address (CR2):");
+    log_info(buf);
+    
     cli();
     hlt();
 }

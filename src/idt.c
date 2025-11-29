@@ -143,6 +143,13 @@ void register_interrupt_handler(uint8_t n, isr_handler_t handler) {
 }
 
 void isr_handler(struct registers* regs) {
+    // Check if a handler is registered
+    if (interrupt_handlers[regs->int_no]) {
+        interrupt_handlers[regs->int_no](regs);
+        // If the handler returns, we assume it handled the exception/interrupt
+        return;
+    }
+
     // Check for CPU exceptions (0-31)
     if (regs->int_no < 32) {
         // Primitive crash screen
@@ -178,14 +185,17 @@ void isr_handler(struct registers* regs) {
             vga[(i+j)*2] = num[j];
             vga[(i+j)*2+1] = 0x4F;
         }
+        
+        // Print CR2 if it's a page fault (14)
+        if (n == 14) {
+             uint32_t cr2;
+             __asm__ __volatile__("mov %%cr2, %0" : "=r"(cr2));
+             // TODO: Print CR2 (hex printing needed)
+        }
 
         // Halt
         __asm__ __volatile__("cli; hlt");
         while(1);
-    }
-
-    if (interrupt_handlers[regs->int_no]) {
-        interrupt_handlers[regs->int_no](regs);
     }
 }
 
